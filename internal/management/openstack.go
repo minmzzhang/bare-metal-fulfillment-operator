@@ -95,6 +95,30 @@ func isAuthError(err error) bool {
 	return errors.As(err, &errAfterReauth)
 }
 
+// withAuthRetry executes the given operation, retrying once with a fresh client if auth fails
+func (c *OpenStackClient) withAuthRetry(ctx context.Context, operation func(client *gophercloud.ServiceClient) error) error {
+	log := ctrllog.FromContext(ctx)
+
+	c.mu.RLock()
+	client := c.client
+	c.mu.RUnlock()
+
+	err := operation(client)
+	if err != nil && isAuthError(err) {
+		log.Info("auth error, attempting reconnect")
+		if reconnErr := c.reconnect(ctx); reconnErr != nil {
+			return fmt.Errorf("reconnect failed: %w", reconnErr)
+		}
+
+		c.mu.RLock()
+		client = c.client
+		c.mu.RUnlock()
+
+		err = operation(client)
+	}
+	return err
+}
+
 func (c *OpenStackClient) reconnect(ctx context.Context) error {
 	log := ctrllog.FromContext(ctx)
 	log.Info("recreating ironic service client after authentication failure")
@@ -118,30 +142,14 @@ func (c *OpenStackClient) reconnect(ctx context.Context) error {
 }
 
 func (c *OpenStackClient) GetPowerState(ctx context.Context, hostID string) (*PowerStatus, error) {
-	log := ctrllog.FromContext(ctx)
+	var node *nodes.Node
+	err := c.withAuthRetry(ctx, func(client *gophercloud.ServiceClient) error {
+		var extractErr error
+		node, extractErr = nodes.Get(ctx, client, hostID).Extract()
+		return extractErr
+	})
 
-	c.mu.RLock()
-	client := c.client
-	c.mu.RUnlock()
-
-	node, err := nodes.Get(ctx, client, hostID).Extract()
 	if err != nil {
-		if isAuthError(err) {
-			log.Info("auth error on GetPowerState, attempting reconnect", "nodeID", hostID)
-			if reconnErr := c.reconnect(ctx); reconnErr != nil {
-				return nil, fmt.Errorf("get node %s: reconnect failed: %w", hostID, reconnErr)
-			}
-
-			c.mu.RLock()
-			client = c.client
-			c.mu.RUnlock()
-
-			node, err = nodes.Get(ctx, client, hostID).Extract()
-			if err != nil {
-				return nil, fmt.Errorf("get node %s after reconnect: %w", hostID, err)
-			}
-			return nodePowerStatus(node, hostID)
-		}
 		return nil, fmt.Errorf("get node %s: %w", hostID, err)
 	}
 
@@ -163,46 +171,56 @@ func nodePowerStatus(node *nodes.Node, hostID string) (*PowerStatus, error) {
 }
 
 func (c *OpenStackClient) SetPowerState(ctx context.Context, hostID string, target PowerState) error {
-	log := ctrllog.FromContext(ctx)
 	switch target {
 	case PowerOn, PowerOff:
 	default:
 		return fmt.Errorf("node %s: invalid target power state %q", hostID, target)
 	}
 
-	c.mu.RLock()
-	client := c.client
-	c.mu.RUnlock()
-
-	res := nodes.ChangePowerState(ctx, client, hostID, nodes.PowerStateOpts{
-		Target: nodes.TargetPowerState(target),
+	err := c.withAuthRetry(ctx, func(client *gophercloud.ServiceClient) error {
+		res := nodes.ChangePowerState(ctx, client, hostID, nodes.PowerStateOpts{
+			Target: nodes.TargetPowerState(target),
+		})
+		return res.ExtractErr()
 	})
-	if err := res.ExtractErr(); err != nil {
-		if isAuthError(err) {
-			log.Info("auth error on SetPowerState, attempting reconnect", "nodeID", hostID, "target", target)
-			if reconnErr := c.reconnect(ctx); reconnErr != nil {
-				return fmt.Errorf("failed to set power state on node %s: reconnect failed: %w", hostID, reconnErr)
-			}
 
-			c.mu.RLock()
-			client = c.client
-			c.mu.RUnlock()
-
-			res = nodes.ChangePowerState(ctx, client, hostID, nodes.PowerStateOpts{
-				Target: nodes.TargetPowerState(target),
-			})
-			if err := res.ExtractErr(); err != nil {
-				if gophercloud.ResponseCodeIs(err, http.StatusConflict) {
-					return fmt.Errorf("node %s: %w", hostID, ErrTransitioning)
-				}
-				return fmt.Errorf("failed to set power state on node %s after reconnect: %w", hostID, err)
-			}
-			return nil
-		}
+	if err != nil {
 		if gophercloud.ResponseCodeIs(err, http.StatusConflict) {
 			return fmt.Errorf("node %s: %w", hostID, ErrTransitioning)
 		}
 		return fmt.Errorf("failed to set power state on node %s: %w", hostID, err)
 	}
 	return nil
+}
+
+func (c *OpenStackClient) TriggerRestart(ctx context.Context, hostID string) error {
+	err := c.withAuthRetry(ctx, func(client *gophercloud.ServiceClient) error {
+		// Use Ironic's reboot command which automatically cycles power off then on
+		res := nodes.ChangePowerState(ctx, client, hostID, nodes.PowerStateOpts{
+			Target: "reboot",
+		})
+		return res.ExtractErr()
+	})
+
+	if err != nil {
+		if gophercloud.ResponseCodeIs(err, http.StatusConflict) {
+			return fmt.Errorf("node %s: %w", hostID, ErrTransitioning)
+		}
+		return fmt.Errorf("failed to trigger restart on node %s: %w", hostID, err)
+	}
+	return nil
+}
+
+func (c *OpenStackClient) IsRestartComplete(ctx context.Context, hostID string) (bool, error) {
+	// Get current power status to check if node is still transitioning
+	powerStatus, err := c.GetPowerState(ctx, hostID)
+	if err != nil {
+		return false, err
+	}
+	if powerStatus == nil {
+		return false, fmt.Errorf("node %s: nil power status", hostID)
+	}
+
+	// Restart is complete when the node is no longer transitioning
+	return !powerStatus.IsTransitioning, nil
 }

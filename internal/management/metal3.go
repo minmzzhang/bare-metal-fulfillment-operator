@@ -171,6 +171,42 @@ func (m *Metal3Client) SetPowerState(ctx context.Context, hostID string, target 
 	return nil
 }
 
+func (m *Metal3Client) TriggerRestart(ctx context.Context, hostID string) error {
+	bmh, err := m.getBMH(ctx, hostID)
+	if err != nil {
+		return err
+	}
+
+	// Check if reboot is already in progress
+	if _, hasRebootAnnotation := bmh.Annotations[metal3api.RebootAnnotationPrefix]; hasRebootAnnotation {
+		return fmt.Errorf("host %s: %w", hostID, ErrTransitioning)
+	}
+
+	// Set reboot annotation to trigger restart
+	original := bmh.DeepCopy()
+	if bmh.Annotations == nil {
+		bmh.Annotations = make(map[string]string)
+	}
+	bmh.Annotations[metal3api.RebootAnnotationPrefix] = ""
+
+	if err := m.client.Patch(ctx, bmh, client.MergeFrom(original)); err != nil {
+		return fmt.Errorf("failed to trigger restart for host %s: %w", hostID, err)
+	}
+
+	return nil
+}
+
+func (m *Metal3Client) IsRestartComplete(ctx context.Context, hostID string) (bool, error) {
+	bmh, err := m.getBMH(ctx, hostID)
+	if err != nil {
+		return false, err
+	}
+
+	// Restart is complete when the reboot annotation is no longer present
+	_, hasRebootAnnotation := bmh.Annotations[metal3api.RebootAnnotationPrefix]
+	return !hasRebootAnnotation, nil
+}
+
 func (m *Metal3Client) getBMH(ctx context.Context, hostID string) (*metal3api.BareMetalHost, error) {
 	namespace, name, err := inventory.ParseHostID(hostID)
 	if err != nil {
