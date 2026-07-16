@@ -478,8 +478,8 @@ func (r *BareMetalPoolReconciler) handleDeletion(ctx context.Context, bareMetalP
 		v1alpha1.BareMetalPoolReasonDeleting,
 	)
 
-	if bareMetalPool.Status.Jobs == nil {
-		bareMetalPool.Status.Jobs = []opv1alpha1.JobStatus{}
+	if bareMetalPool.Status.ProvisioningJobs == nil {
+		bareMetalPool.Status.ProvisioningJobs = []opv1alpha1.JobStatus{}
 	}
 
 	bareMetalInstanceList := &v1alpha1.BareMetalInstanceList{}
@@ -557,7 +557,7 @@ func (r *BareMetalPoolReconciler) reconcileDeprovisioning(ctx context.Context, b
 
 	result, done, err := provisioning.RunDeprovisioningLifecycle(
 		ctx, r.provider, bareMetalPool,
-		&bareMetalPool.Status.Jobs, r.MaxJobHistory, r.ProvisionJobPollIntervalDuration,
+		&bareMetalPool.Status.ProvisioningJobs, r.MaxJobHistory, r.ProvisionJobPollIntervalDuration,
 	)
 	// DeprovisionSkipped is represented as !done + zero result + nil error; treat as done.
 	if !done && result.IsZero() && err == nil {
@@ -646,8 +646,8 @@ func (r *BareMetalPoolReconciler) createBareMetalInstanceCR(
 func (r *BareMetalPoolReconciler) reconcileProvisioning(ctx context.Context, bareMetalPool *v1alpha1.BareMetalPool, bareMetalPoolTemplate string) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	if bareMetalPool.Status.Jobs == nil {
-		bareMetalPool.Status.Jobs = []opv1alpha1.JobStatus{}
+	if bareMetalPool.Status.ProvisioningJobs == nil {
+		bareMetalPool.Status.ProvisioningJobs = []opv1alpha1.JobStatus{}
 	}
 
 	if bareMetalPool.Annotations == nil {
@@ -660,7 +660,7 @@ func (r *BareMetalPoolReconciler) reconcileProvisioning(ctx context.Context, bar
 		r.provider,
 		bareMetalPool,
 		&provisioning.State{
-			Jobs:                 &bareMetalPool.Status.Jobs,
+			Jobs:                 &bareMetalPool.Status.ProvisioningJobs,
 			DesiredConfigVersion: bareMetalPool.Status.DesiredConfigVersion,
 		},
 		r.MaxJobHistory,

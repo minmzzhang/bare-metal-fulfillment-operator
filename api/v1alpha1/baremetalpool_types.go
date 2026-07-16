@@ -66,11 +66,11 @@ type BareMetalPoolStatus struct {
 	// +kubebuilder:validation:Optional
 	HostSets []BareMetalHostSet `json:"hostSets,omitempty"`
 
-	// Jobs tracks the history of provision and deprovision operations
+	// ProvisioningJobs tracks the history of provision and deprovision operations
 	// Ordered chronologically, with latest operations at the end
 	// Limited to the last N jobs (configurable via OSAC_MAX_JOB_HISTORY, default 10)
 	// +kubebuilder:validation:Optional
-	Jobs []opv1alpha1.JobStatus `json:"jobs,omitempty"`
+	ProvisioningJobs []opv1alpha1.JobStatus `json:"provisioningJobs,omitempty"`
 
 	// LastUpdated is the timestamp when the status was last updated
 	// +kubebuilder:validation:Optional
