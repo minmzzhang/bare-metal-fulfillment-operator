@@ -596,7 +596,7 @@ var _ = Describe("BareMetalInstance Controller", func() {
 
 		Context("when a successful provision job exists", func() {
 			BeforeEach(func() {
-				bareMetalInstance.Status.Jobs = []opv1alpha1.JobStatus{
+				bareMetalInstance.Status.ProvisioningJobs = []opv1alpha1.JobStatus{
 					{
 						JobID:     "123",
 						Type:      opv1alpha1.JobTypeProvision,
@@ -619,6 +619,7 @@ var _ = Describe("BareMetalInstance Controller", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(Equal(ctrl.Result{}))
 				Expect(triggerCalled).To(BeFalse())
+				Expect(bareMetalInstance.Status.ProvisioningJobs).To(HaveLen(1))
 			})
 		})
 	})

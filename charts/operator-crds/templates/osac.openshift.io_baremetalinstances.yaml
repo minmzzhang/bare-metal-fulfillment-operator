@@ -219,9 +219,19 @@ spec:
                 description: DesiredConfigVersion is a hash of the spec, used to detect
                   spec changes and control retry behavior.
                 type: string
-              jobs:
+              phase:
+                description: Phase provides a single-value overview of the state of
+                  the BareMetalInstance
+                enum:
+                - Allocating
+                - Progressing
+                - Ready
+                - Failed
+                - Deleting
+                type: string
+              provisioningJobs:
                 description: |-
-                  Jobs tracks the history of provision and deprovision operations
+                  ProvisioningJobs tracks the history of provision and deprovision operations
                   Ordered chronologically, with latest operations at the end
                   Limited to the last N jobs (configurable via OSAC_MAX_JOB_HISTORY, default 10)
                 items:
@@ -276,16 +286,6 @@ spec:
                   - type
                   type: object
                 type: array
-              phase:
-                description: Phase provides a single-value overview of the state of
-                  the BareMetalInstance
-                enum:
-                - Allocating
-                - Progressing
-                - Ready
-                - Failed
-                - Deleting
-                type: string
               restartTrigger:
                 description: RestartTrigger is the observed restart version of the
                   instance

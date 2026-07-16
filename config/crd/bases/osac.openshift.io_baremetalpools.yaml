@@ -187,9 +187,23 @@ spec:
                   - replicas
                   type: object
                 type: array
-              jobs:
+              lastUpdated:
+                description: LastUpdated is the timestamp when the status was last
+                  updated
+                format: date-time
+                type: string
+              phase:
+                description: Phase provides a single-value overview of the state of
+                  the BareMetalPool
+                enum:
+                - Progressing
+                - Failed
+                - Ready
+                - Deleting
+                type: string
+              provisioningJobs:
                 description: |-
-                  Jobs tracks the history of provision and deprovision operations
+                  ProvisioningJobs tracks the history of provision and deprovision operations
                   Ordered chronologically, with latest operations at the end
                   Limited to the last N jobs (configurable via OSAC_MAX_JOB_HISTORY, default 10)
                 items:
@@ -244,20 +258,6 @@ spec:
                   - type
                   type: object
                 type: array
-              lastUpdated:
-                description: LastUpdated is the timestamp when the status was last
-                  updated
-                format: date-time
-                type: string
-              phase:
-                description: Phase provides a single-value overview of the state of
-                  the BareMetalPool
-                enum:
-                - Progressing
-                - Failed
-                - Ready
-                - Deleting
-                type: string
             type: object
         type: object
     served: true

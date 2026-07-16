@@ -181,11 +181,11 @@ type BareMetalInstanceStatus struct {
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Enum=Allocating;Progressing;Ready;Failed;Deleting
 	Phase BareMetalInstancePhaseType `json:"phase,omitempty"`
-	// Jobs tracks the history of provision and deprovision operations
+	// ProvisioningJobs tracks the history of provision and deprovision operations
 	// Ordered chronologically, with latest operations at the end
 	// Limited to the last N jobs (configurable via OSAC_MAX_JOB_HISTORY, default 10)
 	// +kubebuilder:validation:Optional
-	Jobs []opv1alpha1.JobStatus `json:"jobs,omitempty"`
+	ProvisioningJobs []opv1alpha1.JobStatus `json:"provisioningJobs,omitempty"`
 	// Conditions holds an array of metav1.Condition describing host state.
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`

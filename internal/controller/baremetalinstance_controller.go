@@ -459,7 +459,7 @@ func (r *BareMetalInstanceReconciler) reconcileProvisioning(ctx context.Context,
 	bareMetalInstance.Status.DesiredConfigVersion = desiredVersion
 
 	result, err := provisioning.RunProvisioningLifecycle(ctx, r.ProvisioningProvider, bareMetalInstance,
-		&provisioning.State{Jobs: &bareMetalInstance.Status.Jobs, DesiredConfigVersion: desiredVersion},
+		&provisioning.State{Jobs: &bareMetalInstance.Status.ProvisioningJobs, DesiredConfigVersion: desiredVersion},
 		provisioning.DefaultMaxJobHistory, r.ProvisionPollIntervalDuration,
 		&provisioning.PollCallbacks{
 			OnFailed: func(message string) {
@@ -766,13 +766,13 @@ func (r *BareMetalInstanceReconciler) handleDeletion(ctx context.Context, bareMe
 }
 
 func (r *BareMetalInstanceReconciler) reconcileDeprovisioning(ctx context.Context, bareMetalInstance *v1alpha1.BareMetalInstance) (ctrl.Result, bool, error) {
-	if bareMetalInstance.Status.Jobs == nil {
-		bareMetalInstance.Status.Jobs = []opv1alpha1.JobStatus{}
+	if bareMetalInstance.Status.ProvisioningJobs == nil {
+		bareMetalInstance.Status.ProvisioningJobs = []opv1alpha1.JobStatus{}
 	}
 
 	result, done, err := provisioning.RunDeprovisioningLifecycle(
 		ctx, r.ProvisioningProvider, bareMetalInstance,
-		&bareMetalInstance.Status.Jobs, provisioning.DefaultMaxJobHistory, r.ProvisionPollIntervalDuration,
+		&bareMetalInstance.Status.ProvisioningJobs, provisioning.DefaultMaxJobHistory, r.ProvisionPollIntervalDuration,
 	)
 	// DeprovisionSkipped is represented as !done + zero result + nil error; treat as done.
 	if !done && result.IsZero() && err == nil {
